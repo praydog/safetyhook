@@ -237,7 +237,7 @@ std::expected<void, InlineHook::Error> InlineHook::e9_hook(const std::shared_ptr
 
     m_trampoline = std::move(*trampoline_allocation);
 
-    UnprotectMemory unprotect_trampoline{m_trampoline.data(), m_trampoline.size()};
+    auto _unprotect = unprotect(m_trampoline.data(), m_trampoline.size());
 
     for (auto ip = m_target, tramp_ip = m_trampoline.data(); ip < m_target + m_original_bytes.size(); ip += ix.length) {
         if (!decode(&ix, ip)) {
@@ -352,7 +352,7 @@ std::expected<void, InlineHook::Error> InlineHook::ff_hook(const std::shared_ptr
 
     m_trampoline = std::move(*trampoline_allocation);
 
-    UnprotectMemory unprotect_trampoline{m_trampoline.data(), m_trampoline.size()};
+    auto _unprotect = unprotect(m_trampoline.data(), m_trampoline.size());
 
     std::copy(m_original_bytes.begin(), m_original_bytes.end(), m_trampoline.data());
 

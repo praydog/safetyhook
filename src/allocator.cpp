@@ -115,11 +115,9 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
     }
 
     // If we didn't find a free block, we need to allocate a new one.
-    SYSTEM_INFO si{};
+    SystemInfo si = system_info();
 
-    GetSystemInfo(&si);
-
-    auto allocation_size = align_up(aligned_size, system_info().allocation_granularity);
+    auto allocation_size = align_up(aligned_size, si.allocation_granularity);
     auto allocation_address = allocate_nearby_memory(desired_addresses, allocation_size, max_distance);
 
     // And finally, look for a codecave within int3 padding.
@@ -128,14 +126,17 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
     if (!allocation_address && !desired_addresses.empty()) {
         // Locate an address in desired_addresses that has executable permissions.
         // TODO: We could potentially look through other regions not in the desired_addresses list.
-        MEMORY_BASIC_INFORMATION mbi{};
         uint8_t* address = nullptr;
+        VmBasicInfo mbi{};
         for (const auto& addr : desired_addresses) {
-            if (VirtualQuery(addr, &mbi, sizeof(mbi)) == 0) {
+            auto query = vm_query(addr);
+            if (!query) {
                 continue;
             }
 
-            if (mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) {
+            mbi = query.value();
+
+            if (mbi.access.execute && mbi.access.read) {
                 address = reinterpret_cast<uint8_t*>(addr);
                 break;
             }
@@ -145,7 +146,7 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
             return std::unexpected{allocation_address.error()};
         }
 
-        const auto end = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+        const auto end = reinterpret_cast<uintptr_t>(mbi.address) + mbi.size;
 
         // Search for an int3 sled, starting from the target address.
         for (auto ip = address; reinterpret_cast<uintptr_t>(ip) < end; ++ip) {
