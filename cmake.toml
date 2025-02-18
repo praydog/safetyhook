@@ -104,6 +104,7 @@ add_custom_command(
 add_custom_target(Amalgamate ALL DEPENDS ${AMALGAMATED_FILE} ${AMALGAMATED_HEADER})
 """
 
+
 [template.example]
 condition = "build-examples"
 type = "executable"
