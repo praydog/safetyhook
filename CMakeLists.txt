@@ -363,9 +363,9 @@ if(SAFETYHOOK_BUILD_TEST) # build-test
 		"test/allocator.cpp"
 		"test/inline_hook.cpp"
 		"test/inline_hook.x86_64.cpp"
+		"test/inline_hook_int3_allocator.cpp"
 		"test/main.cpp"
 		"test/mid_hook.cpp"
-		"test/test5.cpp"
 		"test/vmt_hook.cpp"
 		cmake.toml
 	)
@@ -401,9 +401,9 @@ if(SAFETYHOOK_BUILD_TEST AND SAFETYHOOK_AMALGAMATE) # build-amalgamate-test
 		"test/allocator.cpp"
 		"test/inline_hook.cpp"
 		"test/inline_hook.x86_64.cpp"
+		"test/inline_hook_int3_allocator.cpp"
 		"test/main.cpp"
 		"test/mid_hook.cpp"
-		"test/test5.cpp"
 		"test/vmt_hook.cpp"
 		"amalgamated-dist/safetyhook.cpp"
 		cmake.toml
