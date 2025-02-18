@@ -39,6 +39,7 @@ constexpr VmAccess VM_ACCESS_RX{.read = true, .write = false, .execute = true};
 constexpr VmAccess VM_ACCESS_RWX{.read = true, .write = true, .execute = true};
 
 struct VmBasicInfo {
+    uint8_t* base_address;
     uint8_t* address;
     size_t size;
     VmAccess access;

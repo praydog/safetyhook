@@ -90,6 +90,7 @@ std::expected<VmBasicInfo, OsError> vm_query(uint8_t* address) {
     };
 
     return VmBasicInfo{
+        .base_address = static_cast<uint8_t*>(mbi.BaseAddress),
         .address = static_cast<uint8_t*>(mbi.AllocationBase),
         .size = mbi.RegionSize,
         .access = access,

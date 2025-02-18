@@ -131,6 +131,7 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
         for (const auto& addr : desired_addresses) {
             auto query = vm_query(addr);
             if (!query) {
+                mbi = VmBasicInfo{};
                 continue;
             }
 
@@ -146,7 +147,7 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
             return std::unexpected{allocation_address.error()};
         }
 
-        const auto end = reinterpret_cast<uintptr_t>(mbi.address) + mbi.size;
+        const auto end = reinterpret_cast<uintptr_t>(mbi.base_address) + mbi.size;
 
         // Search for an int3 sled, starting from the target address.
         for (auto ip = address; reinterpret_cast<uintptr_t>(ip) < end; ++ip) {

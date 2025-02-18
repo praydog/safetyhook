@@ -38,19 +38,19 @@ static suite<"inline hook with no space"> inline_hook_tests = [] {
             }
         
             static void hook0_fn(const std::string& name, std::string& out) {
-                hook0.call<void, const std::string&, std::string&>(name + " and bob", out);
+                hook0.call<void, const std::string&, std::string*>(name + " and bob", &out);
             }
         
             static void hook1_fn(const std::string& name, std::string& out) {
-                hook1.call<void, const std::string&, std::string&>(name + " and alice", out);
+                hook1.call<void, const std::string&, std::string*>(name + " and alice", &out);
             }
         
             static void hook2_fn(const std::string& name, std::string& out) {
-                hook2.call<void, const std::string&, std::string&>(name + " and eve", out);
+                hook2.call<void, const std::string&, std::string*>(name + " and eve", &out);
             }
         
             static void hook3_fn(const std::string& name, std::string& out) {
-                hook3.call<void, const std::string&, std::string&>(name + " and carol", out);
+                hook3.call<void, const std::string&, std::string*>(name + " and carol", &out);
             }
     
             // Intentionally takes up memory space +- 2GB around the target address.
