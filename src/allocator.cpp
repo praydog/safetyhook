@@ -197,6 +197,7 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
 
                     const auto target = forward ? ip : sled + 1;
                     
+                    // The min distance fixes a bug with REALLY small functions
                     if (count >= aligned_size && in_range(target, desired_addresses, max_distance, 0x40)) {
                         allocation_address = target;
                         allocation_size = count;
