@@ -189,7 +189,7 @@ static suite<"inline hook with no space"> inline_hook_tests = [] {
             for (auto i = 0; i < 10; ++i) {
                 ZydisDecodedInstruction ix{};
                 ZydisDecodedOperand operands[ZYDIS_MAX_OPERAND_COUNT];
-                ZydisDecoderDecodeFull(&decoder, reinterpret_cast<void*>(ip), 15, &ix, operands);
+                expect(ZYAN_SUCCESS(ZydisDecoderDecodeFull(&decoder, reinterpret_cast<void*>(ip), 15, &ix, operands)));
 
                 // Convert to text
                 char buffer[256]{};
@@ -243,8 +243,8 @@ static suite<"inline hook with no space"> inline_hook_tests = [] {
             MEMORY_BASIC_INFORMATION mbi_real_say_hi{};
             MEMORY_BASIC_INFORMATION mbi_jmp_point{};
 
-            VirtualQuery(reinterpret_cast<void*>(real_say_hi), &mbi_real_say_hi, sizeof(mbi_real_say_hi));
-            VirtualQuery(reinterpret_cast<void*>(jmp_point), &mbi_jmp_point, sizeof(mbi_jmp_point));
+            expect(VirtualQuery(reinterpret_cast<void*>(real_say_hi), &mbi_real_say_hi, sizeof(mbi_real_say_hi)) != 0);
+            expect(VirtualQuery(reinterpret_cast<void*>(jmp_point), &mbi_jmp_point, sizeof(mbi_jmp_point)) != 0);
 
             HMODULE module_real_say_hi_in = nullptr;
             HMODULE module_jmp_point_in = nullptr;
@@ -271,8 +271,8 @@ static suite<"inline hook with no space"> inline_hook_tests = [] {
             MEMORY_BASIC_INFORMATION mbi_real_say_hi{};
             MEMORY_BASIC_INFORMATION mbi_jmp_point{};
 
-            VirtualQuery(reinterpret_cast<void*>(real_say_hi), &mbi_real_say_hi, sizeof(mbi_real_say_hi));
-            VirtualQuery(reinterpret_cast<void*>(jmp_point), &mbi_jmp_point, sizeof(mbi_jmp_point));
+            expect(VirtualQuery(reinterpret_cast<void*>(real_say_hi), &mbi_real_say_hi, sizeof(mbi_real_say_hi)) != 0);
+            expect(VirtualQuery(reinterpret_cast<void*>(jmp_point), &mbi_jmp_point, sizeof(mbi_jmp_point)) != 0);
 
             HMODULE module_real_say_hi_in = nullptr;
             HMODULE module_jmp_point_in = nullptr;
