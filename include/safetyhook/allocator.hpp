@@ -126,6 +126,6 @@ private:
     [[nodiscard]] static std::expected<uint8_t*, Error> allocate_nearby_memory(
         const std::vector<uint8_t*>& desired_addresses, size_t size, size_t max_distance);
     [[nodiscard]] static bool in_range(
-        uint8_t* address, const std::vector<uint8_t*>& desired_addresses, size_t max_distance);
+        uint8_t* address, const std::vector<uint8_t*>& desired_addresses, size_t max_distance, size_t min_distance = 0);
 };
 } // namespace safetyhook

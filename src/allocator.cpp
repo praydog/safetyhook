@@ -115,15 +115,15 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
     }
 
     // If we didn't find a free block, we need to allocate a new one.
-    SystemInfo si = system_info();
+    const auto si = system_info();
 
-    auto allocation_size = align_up(aligned_size, si.allocation_granularity);
-    auto allocation_address = allocate_nearby_memory(desired_addresses, allocation_size, max_distance);
+    size_t allocation_size = 0;
+    std::expected<uint8_t*, Allocator::Error> allocation_address = std::unexpected{Error::NO_MEMORY_IN_RANGE};
 
-    // And finally, look for a codecave within int3 padding.
+    // Always look for int3 padding first to minimize our footprint.
     // Not just putting this in allocate_nearby_memory because
     // it passes an aligned size, which is not what we want.
-    if (!allocation_address && !desired_addresses.empty()) {
+    if (!desired_addresses.empty()) {
         // Locate an address in desired_addresses that has executable permissions.
         // TODO: We could potentially look through other regions not in the desired_addresses list.
         uint8_t* address = nullptr;
@@ -143,37 +143,88 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
             }
         }
 
-        if (address == nullptr) {
-            return std::unexpected{allocation_address.error()};
-        }
+        if (address != nullptr) {
+            const auto start = reinterpret_cast<uint8_t*>(mbi.base_address);
+            const auto end = start + mbi.size;
+    
+            auto scan = [&](bool forward) {
+                // Search for an int3 sled, starting from the target address.
+                for (auto ip = address; ip > start && ip < end; forward ? ++ip : --ip) {
+                    if (*ip != 0xCC) {
+                        continue;
+                    }
 
-        const auto end = reinterpret_cast<uintptr_t>(mbi.base_address) + mbi.size;
+                    auto sled = ip;
+                    uint32_t count = 0;
 
-        // Search for an int3 sled, starting from the target address.
-        for (auto ip = address; reinterpret_cast<uintptr_t>(ip) < end; ++ip) {
-            if (*ip == 0xCC) {
-                auto sled = ip;
-                uint32_t count = 0;
+                    while (*sled == 0xCC) {
+                        forward ? ++sled : --sled;
+                        ++count;
 
-                while (*sled == 0xCC) {
-                    ++sled;
-                    ++count;
+                        if (sled < start || sled >= end) {
+                            break;
+                        }
+                    }
 
-                    if (reinterpret_cast<uintptr_t>(sled) >= end) {
+                    // Make sure we haven't seen this INT3 sled before in our allocations.
+                    bool seen = false;
+
+                    for (const auto& allocation : m_memory) {
+                        const auto scan_start = forward ? ip : sled;
+                        const auto scan_end = forward ? sled : ip;
+                        if (scan_start >= allocation->address && scan_end < allocation->address + allocation->size) {
+                            seen = true;
+                            ip = sled;
+                            break;
+                        }
+
+                        for (auto node = allocation->freelist.get(); node != nullptr; node = node->next.get()) {
+                            if (scan_start >= node->start && scan_end < node->end) {
+                                seen = true;
+                                ip = sled;
+                                break;
+                            }
+                        }
+
+                        if (seen) {
+                            break;
+                        }
+                    }
+
+                    if (seen) {
+                        continue;
+                    }
+
+                    const auto target = forward ? ip : sled + 1;
+                    
+                    if (count >= aligned_size && in_range(target, desired_addresses, max_distance, 0x40)) {
+                        allocation_address = target;
+                        allocation_size = count;
                         break;
                     }
-                }
 
-                if (count >= 10 && count >= size && in_range(ip, desired_addresses, max_distance)) {
-                    allocation_address = ip;
-                    allocation_size = count;
-                    break;
+                    ip = sled;
                 }
+            };
+    
+            scan(true);
+    
+            if (!allocation_address.has_value()) {
+                scan(false);
             }
+    
+            /*if (!allocation_address) {
+                return std::unexpected{Error::NO_MEMORY_IN_RANGE_CODECAVE};
+            }*/
         }
     }
 
-    if (!allocation_address) {
+    if (!allocation_address.has_value()) {
+        allocation_size = align_up(aligned_size, si.allocation_granularity);
+        allocation_address = allocate_nearby_memory(desired_addresses, allocation_size, max_distance);
+    }
+
+    if (!allocation_address.has_value()) {
         return std::unexpected{allocation_address.error()};
     }
 
@@ -320,10 +371,10 @@ std::expected<uint8_t*, Allocator::Error> Allocator::allocate_nearby_memory(
     return std::unexpected{Error::NO_MEMORY_IN_RANGE};
 }
 
-bool Allocator::in_range(uint8_t* address, const std::vector<uint8_t*>& desired_addresses, size_t max_distance) {
+bool Allocator::in_range(uint8_t* address, const std::vector<uint8_t*>& desired_addresses, size_t max_distance, size_t min_distance) {
     return std::ranges::all_of(desired_addresses, [&](const auto& desired_address) {
         const size_t delta = (address > desired_address) ? address - desired_address : desired_address - address;
-        return delta <= max_distance;
+        return delta <= max_distance && delta >= min_distance;
     });
 }
 
