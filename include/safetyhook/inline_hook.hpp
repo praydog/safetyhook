@@ -319,6 +319,7 @@ private:
     uint8_t* m_target{};
     uint8_t* m_destination{};
     Allocation m_trampoline{};
+    Allocation m_trampoline_intermediary{};
     std::vector<uint8_t> m_original_bytes{};
     uintptr_t m_trampoline_size{};
     std::recursive_mutex m_mutex{};

@@ -32,8 +32,17 @@ struct JmpFF {
 
 struct TrampolineEpilogueE9 {
     JmpE9 jmp_to_original{};
-    JmpFF jmp_to_destination{};
-    uint64_t destination_address{};
+};
+
+struct TrampolineIntermediary {
+    union {
+        JmpE9 jmp_to_destination_e9;
+
+        struct {
+            JmpFF jmp_to_destination_ff;
+            uint64_t destination_address;
+        };
+    };
 };
 
 struct TrampolineEpilogueFF {
@@ -149,6 +158,7 @@ InlineHook& InlineHook::operator=(InlineHook&& other) noexcept {
 
         m_target = other.m_target;
         m_destination = other.m_destination;
+        m_trampoline_intermediary = std::move(other.m_trampoline_intermediary);
         m_trampoline = std::move(other.m_trampoline);
         m_trampoline_size = other.m_trampoline_size;
         m_original_bytes = std::move(other.m_original_bytes);
@@ -229,19 +239,32 @@ std::expected<void, InlineHook::Error> InlineHook::e9_hook(const std::shared_ptr
         }
     }
 
+    // This will allow us to most of the time use an E9 jmp if we allocate into an INT3 sled.
+    // We use it as an intermediary to do an absolute jmp into the destination.
+    auto trampoline_intermediary_allocation = allocator->allocate_near(desired_addresses, sizeof(TrampolineIntermediary));
+
+    if (!trampoline_intermediary_allocation) {  
+        return std::unexpected{Error::bad_allocation(trampoline_intermediary_allocation.error())};
+    }
+    
+    m_trampoline_intermediary = std::move(*trampoline_intermediary_allocation);
+
     auto trampoline_allocation = allocator->allocate_near(desired_addresses, m_trampoline_size);
 
     if (!trampoline_allocation) {
+        m_trampoline_intermediary.free();
         return std::unexpected{Error::bad_allocation(trampoline_allocation.error())};
     }
 
     m_trampoline = std::move(*trampoline_allocation);
 
-    auto _unprotect = unprotect(m_trampoline.data(), m_trampoline.size());
+    auto _unprotect = unprotect(m_trampoline_intermediary.data(), m_trampoline_intermediary.size());
+    auto _unprotect2 = unprotect(m_trampoline.data(), m_trampoline.size());
 
     for (auto ip = m_target, tramp_ip = m_trampoline.data(); ip < m_target + m_original_bytes.size(); ip += ix.length) {
         if (!decode(&ix, ip)) {
             m_trampoline.free();
+            m_trampoline_intermediary.free();
             return std::unexpected{Error::failed_to_decode_instruction(ip)};
         }
 
@@ -301,22 +324,35 @@ std::expected<void, InlineHook::Error> InlineHook::e9_hook(const std::shared_ptr
         return std::unexpected{result.error()};
     }
 
-    // jmp from trampoline to destination.
-    src = reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_destination);
+    auto trampoline_intermediary = reinterpret_cast<TrampolineIntermediary*>(m_trampoline_intermediary.data());
     dst = m_destination;
 
 #if SAFETYHOOK_ARCH_X86_64
-    auto data = reinterpret_cast<uint8_t*>(&trampoline_epilogue->destination_address);
+    const auto distance_to_dst = static_cast<ptrdiff_t>(m_destination - (reinterpret_cast<uint8_t*>(&trampoline_intermediary->jmp_to_destination_e9) + sizeof(JmpE9)));
+    bool is_long_jmp = false;
 
-    if (auto result = emit_jmp_ff(src, dst, data); !result) {
-        return std::unexpected{result.error()};
+    if (static_cast<uintptr_t>(distance_to_dst) > (uintptr_t)std::numeric_limits<int32_t>::max()) {
+        is_long_jmp = true;
+    }
+
+    if (is_long_jmp) {
+        src = reinterpret_cast<uint8_t*>(&trampoline_intermediary->jmp_to_destination_ff);
+        auto data2 = reinterpret_cast<uint8_t*>(&trampoline_intermediary->destination_address);
+        if (auto result = emit_jmp_ff(src, dst, data2); !result) {
+            return std::unexpected{result.error()};
+        }
+    } else {
+        src = reinterpret_cast<uint8_t*>(&trampoline_intermediary->jmp_to_destination_e9);
+        if (auto result = emit_jmp_e9(src, dst); !result) {
+            return std::unexpected{result.error()};
+        }
     }
 #elif SAFETYHOOK_ARCH_X86_32
     if (auto result = emit_jmp_e9(src, dst); !result) {
         return std::unexpected{result.error()};
     }
 #endif
-
+    
     m_type = Type::E9;
 
     return {};
@@ -386,12 +422,9 @@ std::expected<void, InlineHook::Error> InlineHook::enable() {
     // jmp from original to trampoline.
     trap_threads(m_target, m_trampoline.data(), m_original_bytes.size(), [this, &error] {
         if (m_type == Type::E9) {
-            auto trampoline_epilogue = reinterpret_cast<TrampolineEpilogueE9*>(
-                m_trampoline.address() + m_trampoline_size - sizeof(TrampolineEpilogueE9));
+            auto jmp_to_destination = m_trampoline_intermediary.data();
 
-            if (auto result = emit_jmp_e9(m_target,
-                    reinterpret_cast<uint8_t*>(&trampoline_epilogue->jmp_to_destination), m_original_bytes.size());
-                !result) {
+            if (auto result = emit_jmp_e9(m_target, jmp_to_destination, m_original_bytes.size()); !result) {
                 error = result.error();
             }
         }

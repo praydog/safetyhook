@@ -170,7 +170,7 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
                     bool seen = false;
 
                     for (const auto& allocation : m_memory) {
-                        const auto scan_start = forward ? ip : sled;
+                        const auto scan_start = forward ? ip : (sled + 1);
                         const auto scan_end = forward ? sled : ip;
                         if (scan_start >= allocation->address && scan_end < allocation->address + allocation->size) {
                             seen = true;
@@ -213,10 +213,6 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
             if (!allocation_address.has_value()) {
                 scan(false);
             }
-    
-            /*if (!allocation_address) {
-                return std::unexpected{Error::NO_MEMORY_IN_RANGE_CODECAVE};
-            }*/
         }
     }
 
