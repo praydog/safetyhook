@@ -249,6 +249,9 @@ std::expected<void, InlineHook::Error> InlineHook::e9_hook(const std::shared_ptr
     
     m_trampoline_intermediary = std::move(*trampoline_intermediary_allocation);
 
+    // This means allocate memory near the intermediary jmp.
+    desired_addresses.push_back(m_trampoline_intermediary.data());
+
     auto trampoline_allocation = allocator->allocate_near(desired_addresses, m_trampoline_size);
 
     if (!trampoline_allocation) {
@@ -328,10 +331,11 @@ std::expected<void, InlineHook::Error> InlineHook::e9_hook(const std::shared_ptr
     dst = m_destination;
 
 #if SAFETYHOOK_ARCH_X86_64
-    const auto distance_to_dst = static_cast<ptrdiff_t>(m_destination - (reinterpret_cast<uint8_t*>(&trampoline_intermediary->jmp_to_destination_e9) + sizeof(JmpE9)));
+    const auto post_jmp = (reinterpret_cast<uint8_t*>(&trampoline_intermediary->jmp_to_destination_e9) + sizeof(JmpE9));
+    const auto distance_to_dst = post_jmp > m_destination ? post_jmp - m_destination : m_destination - post_jmp;
     bool is_long_jmp = false;
 
-    if (static_cast<uintptr_t>(distance_to_dst) > (uintptr_t)std::numeric_limits<int32_t>::max()) {
+    if (static_cast<uintptr_t>(distance_to_dst) > 0x7FFF'FFFF) {
         is_long_jmp = true;
     }
 

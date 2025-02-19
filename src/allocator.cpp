@@ -117,8 +117,8 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
     // If we didn't find a free block, we need to allocate a new one.
     const auto si = system_info();
 
-    size_t allocation_size = 0;
-    std::expected<uint8_t*, Allocator::Error> allocation_address = std::unexpected{Error::NO_MEMORY_IN_RANGE};
+    size_t allocation_size = align_up(aligned_size, si.allocation_granularity);
+    std::expected<uint8_t*, Allocator::Error> allocation_address = allocate_nearby_memory(desired_addresses, allocation_size, max_distance);
 
     // Always look for int3 padding first to minimize our footprint.
     // Not just putting this in allocate_nearby_memory because
@@ -216,10 +216,6 @@ std::expected<Allocation, Allocator::Error> Allocator::internal_allocate_near(
         }
     }
 
-    if (!allocation_address.has_value()) {
-        allocation_size = align_up(aligned_size, si.allocation_granularity);
-        allocation_address = allocate_nearby_memory(desired_addresses, allocation_size, max_distance);
-    }
 
     if (!allocation_address.has_value()) {
         return std::unexpected{allocation_address.error()};
